@@ -4,7 +4,7 @@ import { NextResponse, type NextRequest } from "next/server"
 const PROTECTED_PREFIXES = ["/dashboard", "/plans", "/profile", "/admin"]
 const AUTH_PAGES = ["/login", "/register"]
 
-export async function updateSession(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -47,4 +47,8 @@ export async function updateSession(request: NextRequest) {
   }
 
   return supabaseResponse
+}
+
+export const config = {
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)"],
 }
