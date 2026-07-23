@@ -69,31 +69,33 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("wallet_balance, referred_by")
+    .select("wallet_balance, referral_code")
     .eq("id", user.id)
     .single()
   if (!profile) return { ok: false, error: "Profile not found." }
 
-  // Require at least one referral to withdraw
-  if (!profile.referred_by) {
-    return { ok: false, error: "Add 1 referrer to enable withdrawals." }
+  // Check if user has at least one active referral (referred user with approved deposit)
+  const { data: activeReferrals } = await supabase
+    .from("profiles")
+    .select("id")
+    .eq("referred_by", profile.referral_code)
+  
+  if (!activeReferrals || activeReferrals.length === 0) {
+    return { ok: false, error: "Withdrawal Unavailable You must have at least one active referral who has made a successful deposit before you can withdraw your earnings." }
   }
 
-  // Verify the referrer has at least one approved deposit
-  const { data: referrer } = await supabase
-    .from("profiles")
-    .select("referral_code")
-    .eq("referral_code", profile.referred_by)
-    .single()
-  if (!referrer) return { ok: false, error: "Invalid referrer." }
-
-  const { count: referrerDeposits } = await supabase
+  // Verify at least one referred user has an approved deposit
+  const referredUserIds = activeReferrals.map((r) => r.id)
+  const { count: activeDeposits } = await supabase
     .from("transactions")
     .select("id", { count: "exact", head: true })
-    .eq("user_id", referrer.id || "")
+    .in("user_id", referredUserIds)
     .eq("type", "deposit")
     .eq("status", "approved")
-  if ((referrerDeposits ?? 0) === 0) return { ok: false, error: "Your referrer must have at least 1 approved deposit." }
+  
+  if ((activeDeposits ?? 0) === 0) {
+    return { ok: false, error: "Withdrawal Unavailable You must have at least one active referral who has made a successful deposit before you can withdraw your earnings." }
+  }
 
   const { data: settings } = await supabase.from("settings").select("min_withdrawal").eq("id", "global").single()
   const min = Number(settings?.min_withdrawal ?? 500)
