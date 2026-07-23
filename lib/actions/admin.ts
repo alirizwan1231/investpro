@@ -52,7 +52,7 @@ export async function approveDeposit(txId: string): Promise<ActionResult> {
       .eq("user_id", tx.user_id)
       .eq("type", "deposit")
       .eq("status", "approved")
-    if ((count ?? 0) <= 1) {
+    if ((count ?? 0) === 1) {
       const { data: settings } = await admin
         .from("settings")
         .select("referral_bonus_percent")
@@ -148,7 +148,7 @@ export async function setUserBlocked(userId: string, blocked: boolean): Promise<
   return { ok: true }
 }
 
-/** Manually adjust a user's wallet balance (admin credit/debit). */
+/** Manually adjust a user's wallet balance (admin credit/debit). Only updates wallet_balance field. */
 export async function adjustBalance(userId: string, delta: number): Promise<ActionResult> {
   const { admin, error } = await requireAdmin()
   if (!admin) return { ok: false, error }
@@ -159,6 +159,7 @@ export async function adjustBalance(userId: string, delta: number): Promise<Acti
   const next = Number(profile.wallet_balance) + delta
   if (next < 0) return { ok: false, error: "Balance cannot go negative." }
 
+  // Only update wallet_balance; all other fields remain unchanged.
   await admin.from("profiles").update({ wallet_balance: next }).eq("id", userId)
   await admin.from("transactions").insert({
     user_id: userId,

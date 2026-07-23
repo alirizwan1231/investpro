@@ -51,7 +51,7 @@ export default async function DashboardPage() {
                 <DepositDialog settings={settings} userId={profile.id} />
               </div>
               <div className="w-full sm:w-32">
-                <WithdrawDialog settings={settings} balance={Number(profile.wallet_balance)} />
+                <WithdrawDialog settings={settings} balance={Number(profile.wallet_balance)} hasReferrer={!!profile.referred_by} />
               </div>
             </div>
           </CardContent>

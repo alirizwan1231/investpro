@@ -21,9 +21,11 @@ import type { Settings } from "@/lib/types"
 export function WithdrawDialog({
   settings,
   balance,
+  hasReferrer,
 }: {
   settings: Settings | null
   balance: number
+  hasReferrer: boolean
 }) {
   const [open, setOpen] = useState(false)
   const [method, setMethod] = useState("JazzCash")
@@ -32,6 +34,28 @@ export function WithdrawDialog({
   const [loading, setLoading] = useState(false)
 
   const min = Number(settings?.min_withdrawal ?? 500)
+
+  if (!hasReferrer) {
+    return (
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogTrigger
+          render={
+            <Button variant="outline" className="w-full" disabled>
+              <i className="fa-solid fa-arrow-up-from-bracket mr-2" aria-hidden="true" /> Withdraw
+            </Button>
+          }
+        />
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Withdrawal disabled</DialogTitle>
+            <DialogDescription>
+              You need to be referred by someone to enable withdrawals. Share your referral code with a friend, or ask an existing member to refer you.
+            </DialogDescription>
+          </DialogHeader>
+        </DialogContent>
+      </Dialog>
+    )
+  }
 
   async function handleSubmit() {
     if (!amount || Number(amount) <= 0) return toast.error("Enter a valid amount.")
