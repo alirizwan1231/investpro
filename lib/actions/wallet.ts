@@ -14,28 +14,15 @@ async function requireUser() {
   return { supabase, user }
 }
 
-/** Ensure the user is NOT an admin (admins use separate admin actions). */
-async function requireNonAdmin() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) return { supabase, user: null, isAdmin: false }
 
-  const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-  const isAdmin = profile?.role === "admin"
-  
-  return { supabase, user, isAdmin }
-}
 
 /**
  * Submit a deposit request. Creates a pending `deposit` transaction with the
  * uploaded proof URL. Admin approval credits the wallet (see admin actions).
  */
 export async function submitDeposit(formData: FormData): Promise<ActionResult> {
-  const { supabase, user, isAdmin } = await requireNonAdmin()
+  const { supabase, user } = await requireUser()
   if (!user) return { ok: false, error: "Not authenticated." }
-  if (isAdmin) return { ok: false, error: "Admins cannot use user wallet actions." }
 
   const amount = Number(formData.get("amount"))
   const paymentMethod = String(formData.get("payment_method") || "")
@@ -69,9 +56,8 @@ export async function submitDeposit(formData: FormData): Promise<ActionResult> {
  * refunded (see admin actions).
  */
 export async function submitWithdrawal(formData: FormData): Promise<ActionResult> {
-  const { supabase, user, isAdmin } = await requireNonAdmin()
+  const { supabase, user } = await requireUser()
   if (!user) return { ok: false, error: "Not authenticated." }
-  if (isAdmin) return { ok: false, error: "Admins cannot use user wallet actions." }
 
   const amount = Number(formData.get("amount"))
   const paymentMethod = String(formData.get("payment_method") || "")
@@ -92,6 +78,22 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
   if (!profile.referred_by) {
     return { ok: false, error: "Add 1 referrer to enable withdrawals." }
   }
+
+  // Verify the referrer has at least one approved deposit
+  const { data: referrer } = await supabase
+    .from("profiles")
+    .select("referral_code")
+    .eq("referral_code", profile.referred_by)
+    .single()
+  if (!referrer) return { ok: false, error: "Invalid referrer." }
+
+  const { count: referrerDeposits } = await supabase
+    .from("transactions")
+    .select("id", { count: "exact", head: true })
+    .eq("user_id", referrer.id || "")
+    .eq("type", "deposit")
+    .eq("status", "approved")
+  if ((referrerDeposits ?? 0) === 0) return { ok: false, error: "Your referrer must have at least 1 approved deposit." }
 
   const { data: settings } = await supabase.from("settings").select("min_withdrawal").eq("id", "global").single()
   const min = Number(settings?.min_withdrawal ?? 500)
@@ -133,9 +135,8 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
  * total_invested, and records an `investment` transaction.
  */
 export async function investInPlan(formData: FormData): Promise<ActionResult> {
-  const { supabase, user, isAdmin } = await requireNonAdmin()
+  const { supabase, user } = await requireUser()
   if (!user) return { ok: false, error: "Not authenticated." }
-  if (isAdmin) return { ok: false, error: "Admins cannot use user wallet actions." }
 
   const planId = String(formData.get("plan_id") || "")
   const amount = Number(formData.get("amount"))
