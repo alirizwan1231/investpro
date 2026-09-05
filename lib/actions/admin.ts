@@ -16,9 +16,9 @@ async function requireAdmin() {
   if (!user) return { admin: null, error: "Not authenticated." as const }
 
   const { data: profile } = await supabase.from("profiles").select("role").eq("id", user.id).single()
-  if (!profile || profile.role !== "admin") return { admin: null, error: "Not authorized." as const }
+  if (!profile || profile.role !== "admin") return { admin: null, user: null, error: "Not authorized." as const }
 
-  return { admin: createAdminClient(), error: null }
+  return { admin: createAdminClient(), user, error: null }
 }
 
 /** Approve a pending deposit: credit wallet, pay referral bonus on first deposit. */
@@ -144,26 +144,23 @@ export async function rejectWithdrawal(txId: string): Promise<ActionResult> {
 const impersonationCookie = "investpro_admin_impersonation"
 
 export async function startImpersonation(userId: string): Promise<ActionResult> {
-  const { admin, error } = await requireAdmin()
-  if (!admin) return { ok: false, error }
+  const { admin, user, error } = await requireAdmin()
+  if (!admin || !user) return { ok: false, error }
   if (!userId) return { ok: false, error: "User is required." }
 
   const { data: target } = await admin.from("profiles").select("id, role, is_blocked").eq("id", userId).single()
   if (!target || target.role === "admin") return { ok: false, error: "Only active user accounts can be impersonated." }
   if (target.is_blocked) return { ok: false, error: "Blocked accounts cannot be impersonated." }
 
-  const { data: current } = await admin.auth.getUser()
-  if (!current.user) return { ok: false, error: "Not authenticated." }
-
   const store = await cookies()
-  store.set(impersonationCookie, JSON.stringify({ adminId: current.user.id, targetId: userId, createdAt: Date.now() }), {
+  store.set(impersonationCookie, JSON.stringify({ adminId: user.id, targetId: userId, createdAt: Date.now() }), {
     httpOnly: true,
     sameSite: "lax",
     secure: process.env.NODE_ENV === "production",
     path: "/",
     maxAge: 60 * 30,
   })
-  await admin.from("admin_impersonation_audit").insert({ admin_user_id: current.user.id, target_user_id: userId, action: "start" })
+  await admin.from("admin_impersonation_audit").insert({ admin_user_id: user.id, target_user_id: userId, action: "start" })
   return { ok: true }
 }
 
