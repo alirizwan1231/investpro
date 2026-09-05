@@ -74,7 +74,7 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
     .single()
   if (!profile) return { ok: false, error: "Profile not found." }
 
-  const withdrawalReferralError = "Please make 1 valid referral before making a withdrawal."
+  const withdrawalReferralError = "Withdrawal Unavailable You must have at least one active referral who has made a successful deposit before you can withdraw your earnings."
 
   const { data: settings } = await supabase.from("settings").select("min_withdrawal").eq("id", "global").single()
   const min = Number(settings?.min_withdrawal ?? 500)
@@ -103,20 +103,13 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
   }
 
   // Atomically claim one qualifying referral so each referral unlocks one withdrawal.
-  const { data: claimedReferral, error: claimError } = await supabase.rpc("claim_active_referral_for_withdrawal")
-  if (claimError || !claimedReferral) {
+  const { error: claimError } = await supabase.rpc("claim_active_referral_for_withdrawal", {
+    p_withdrawal_transaction_id: withdrawal.id,
+  })
+  if (claimError) {
     await supabase.from("transactions").delete().eq("id", withdrawal.id).eq("user_id", user.id).eq("status", "pending")
     await supabase.from("profiles").update({ wallet_balance: Number(profile.wallet_balance) }).eq("id", user.id)
     return { ok: false, error: withdrawalReferralError }
-  }
-
-  const { error: linkError } = await supabase
-    .from("referral_withdrawal_uses")
-    .update({ withdrawal_transaction_id: withdrawal.id })
-    .eq("user_id", user.id)
-    .eq("referral_user_id", claimedReferral)
-  if (linkError) {
-    return { ok: false, error: "Withdrawal created, but referral tracking failed. Contact support before retrying." }
   }
 
   revalidatePath("/dashboard")

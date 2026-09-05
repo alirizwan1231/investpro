@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { createAdminClient } from "@/lib/supabase/admin"
 import { revalidatePath } from "next/cache"
+import { cookies } from "next/headers"
 
 type ActionResult = { ok: boolean; error?: string }
 
@@ -140,6 +141,38 @@ export async function rejectWithdrawal(txId: string): Promise<ActionResult> {
 }
 
 /** Block or unblock a user. */
+const impersonationCookie = "investpro_admin_impersonation"
+
+export async function startImpersonation(userId: string): Promise<ActionResult> {
+  const { admin, error } = await requireAdmin()
+  if (!admin) return { ok: false, error }
+  if (!userId) return { ok: false, error: "User is required." }
+
+  const { data: target } = await admin.from("profiles").select("id, role, is_blocked").eq("id", userId).single()
+  if (!target || target.role === "admin") return { ok: false, error: "Only active user accounts can be impersonated." }
+  if (target.is_blocked) return { ok: false, error: "Blocked accounts cannot be impersonated." }
+
+  const { data: current } = await admin.auth.getUser()
+  if (!current.user) return { ok: false, error: "Not authenticated." }
+
+  const store = await cookies()
+  store.set(impersonationCookie, JSON.stringify({ adminId: current.user.id, targetId: userId, createdAt: Date.now() }), {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 60 * 30,
+  })
+  await admin.from("admin_impersonation_audit").insert({ admin_user_id: current.user.id, target_user_id: userId, action: "start" })
+  return { ok: true }
+}
+
+export async function stopImpersonation(): Promise<ActionResult> {
+  const store = await cookies()
+  store.delete(impersonationCookie)
+  return { ok: true }
+}
+
 export async function setUserBlocked(userId: string, blocked: boolean): Promise<ActionResult> {
   const { admin, error } = await requireAdmin()
   if (!admin) return { ok: false, error }

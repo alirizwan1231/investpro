@@ -77,7 +77,7 @@ export function WithdrawDialog({
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label>Withdraw to</Label>
-            <Select value={method} onValueChange={setMethod}>
+            <Select value={method} onValueChange={(value) => value && setMethod(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

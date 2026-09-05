@@ -25,7 +25,7 @@ function withUser(tx: Transaction[], profiles: Profile[]): AdminTransaction[] {
   const map = new Map(profiles.map((p) => [p.id, p]))
   return tx.map((t) => {
     const p = map.get(t.user_id)
-    return { ...t, user_name: p?.name || p?.username, user_email: p?.email ?? undefined }
+    return { ...t, user_name: p?.name || p?.username || undefined, user_email: p?.email ?? undefined }
   })
 }
 

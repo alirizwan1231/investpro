@@ -3,6 +3,8 @@ import { getCurrentUser, getSettings, getTransactions, getInvestments } from "@/
 import { AppNav } from "@/components/app-nav"
 import { DepositDialog } from "@/components/deposit-dialog"
 import { WithdrawDialog } from "@/components/withdraw-dialog"
+import { ImpersonationBanner } from "@/components/impersonation-banner"
+import { getImpersonationContext } from "@/lib/impersonation"
 import { TransactionList } from "@/components/transaction-list"
 import { InvestmentCard } from "@/components/investment-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,29 +14,39 @@ import { formatCurrency } from "@/lib/format"
 
 export default async function DashboardPage() {
   const { profile } = await getCurrentUser()
+  const impersonation = await getImpersonationContext()
+  const viewedProfile = impersonation
+    ? ((await (async () => {
+        const { createAdminClient } = await import("@/lib/supabase/admin")
+        const admin = createAdminClient()
+        const { data } = await admin.from("profiles").select("*").eq("id", impersonation.targetId).single()
+        return data
+      })()) ?? profile)
+    : profile
   const [settings, transactions, investments] = await Promise.all([
     getSettings(),
-    getTransactions(profile.id),
-    getInvestments(profile.id),
+    getTransactions(viewedProfile.id),
+    getInvestments(viewedProfile.id),
   ])
 
   const activeInvestments = investments.filter((i) => i.status === "active")
 
   const stats = [
-    { label: "Wallet Balance", value: profile.wallet_balance, icon: "fa-wallet", tone: "text-primary" },
-    { label: "Total Invested", value: profile.total_invested, icon: "fa-layer-group", tone: "text-accent" },
-    { label: "Total Profit", value: profile.total_profit, icon: "fa-sack-dollar", tone: "text-success" },
+    { label: "Wallet Balance", value: viewedProfile.wallet_balance, icon: "fa-wallet", tone: "text-primary" },
+    { label: "Total Invested", value: viewedProfile.total_invested, icon: "fa-layer-group", tone: "text-accent" },
+    { label: "Total Profit", value: viewedProfile.total_profit, icon: "fa-sack-dollar", tone: "text-success" },
   ]
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
+      {impersonation && <ImpersonationBanner userName={impersonation.targetName} />}
       <AppNav isAdmin={profile.role === "admin"} />
       <Toaster position="top-center" richColors />
 
       <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-8">
         <div className="mb-8">
           <h1 className="text-2xl font-bold">
-            Welcome back, {profile.name?.split(" ")[0] || profile.username || "investor"}
+            Welcome back, {viewedProfile.name?.split(" ")[0] || viewedProfile.username || "investor"}
           </h1>
           <p className="text-sm text-muted-foreground">Here&apos;s an overview of your account.</p>
         </div>
@@ -48,10 +60,10 @@ export default async function DashboardPage() {
             </div>
             <div className="flex w-full gap-3 sm:w-auto">
               <div className="w-full sm:w-32">
-                <DepositDialog settings={settings} userId={profile.id} />
+                <DepositDialog settings={settings} userId={viewedProfile.id} />
               </div>
               <div className="w-full sm:w-32">
-                <WithdrawDialog settings={settings} balance={Number(profile.wallet_balance)} />
+                <WithdrawDialog settings={settings} balance={Number(viewedProfile.wallet_balance)} />
               </div>
             </div>
           </CardContent>
