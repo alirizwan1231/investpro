@@ -81,7 +81,7 @@ export function DepositDialog({ settings, userId }: { settings: Settings | null;
         <div className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label>Payment method</Label>
-            <Select value={method} onValueChange={setMethod}>
+            <Select value={method} onValueChange={(value) => value && setMethod(value)}>
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>

@@ -9,6 +9,7 @@ const TYPE_META: Record<TxType, { icon: string; label: string; tone: string }> =
   investment: { icon: "fa-layer-group", label: "Investment", tone: "text-accent" },
   profit: { icon: "fa-sack-dollar", label: "Profit", tone: "text-success" },
   referral: { icon: "fa-users", label: "Referral bonus", tone: "text-primary" },
+  adjustment: { icon: "fa-sliders", label: "Adjustment", tone: "text-warning" },
 }
 
 function statusVariant(status: TxStatus): string {

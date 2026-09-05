@@ -14,6 +14,8 @@ async function requireUser() {
   return { supabase, user }
 }
 
+
+
 /**
  * Submit a deposit request. Creates a pending `deposit` transaction with the
  * uploaded proof URL. Admin approval credits the wallet (see admin actions).
@@ -67,10 +69,12 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
 
   const { data: profile } = await supabase
     .from("profiles")
-    .select("wallet_balance")
+    .select("wallet_balance, referral_code")
     .eq("id", user.id)
     .single()
   if (!profile) return { ok: false, error: "Profile not found." }
+
+  const withdrawalReferralError = "Withdrawal Unavailable You must have at least one active referral who has made a successful deposit before you can withdraw your earnings."
 
   const { data: settings } = await supabase.from("settings").select("min_withdrawal").eq("id", "global").single()
   const min = Number(settings?.min_withdrawal ?? 500)
@@ -84,7 +88,7 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
     .eq("id", user.id)
   if (updErr) return { ok: false, error: updErr.message }
 
-  const { error } = await supabase.from("transactions").insert({
+  const { data: withdrawal, error } = await supabase.from("transactions").insert({
     user_id: user.id,
     type: "withdrawal",
     amount,
@@ -92,14 +96,20 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
     payment_method: paymentMethod,
     account_number: accountNumber,
     description: `Withdrawal to ${paymentMethod} ${accountNumber}`,
+  }).select("id").single()
+  if (error || !withdrawal) {
+    await supabase.from("profiles").update({ wallet_balance: Number(profile.wallet_balance) }).eq("id", user.id)
+    return { ok: false, error: error?.message ?? "Could not create withdrawal request." }
+  }
+
+  // Atomically claim one qualifying referral so each referral unlocks one withdrawal.
+  const { error: claimError } = await supabase.rpc("claim_active_referral_for_withdrawal", {
+    p_withdrawal_transaction_id: withdrawal.id,
   })
-  if (error) {
-    // Roll back the reservation.
-    await supabase
-      .from("profiles")
-      .update({ wallet_balance: Number(profile.wallet_balance) })
-      .eq("id", user.id)
-    return { ok: false, error: error.message }
+  if (claimError) {
+    await supabase.from("transactions").delete().eq("id", withdrawal.id).eq("user_id", user.id).eq("status", "pending")
+    await supabase.from("profiles").update({ wallet_balance: Number(profile.wallet_balance) }).eq("id", user.id)
+    return { ok: false, error: withdrawalReferralError }
   }
 
   revalidatePath("/dashboard")

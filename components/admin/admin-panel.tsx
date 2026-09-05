@@ -18,6 +18,7 @@ import {
   rejectWithdrawal,
   setUserBlocked,
   adjustBalance,
+  startImpersonation,
 } from "@/lib/actions/admin"
 import { PaymentSettingsForm } from "./payment-settings-form"
 import { PlansManager } from "./plans-manager"
@@ -395,6 +396,20 @@ function UsersTable({
                           }}
                         >
                           Adjust
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={pending || u.is_blocked}
+                          onClick={() =>
+                            run(async () => {
+                              const result = await startImpersonation(u.id)
+                              if (result.ok) window.location.href = "/dashboard"
+                              return result
+                            }, "Viewing user account.")
+                          }
+                        >
+                          View account
                         </Button>
                       </div>
                       {adjusting === u.id && (
