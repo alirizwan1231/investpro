@@ -103,10 +103,10 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
   }
 
   // Atomically claim one qualifying referral so each referral unlocks one withdrawal.
-  const { error: claimError } = await supabase.rpc("claim_active_referral_for_withdrawal", {
+  const { data: claimedReferral, error: claimError } = await supabase.rpc("claim_active_referral_for_withdrawal", {
     p_withdrawal_transaction_id: withdrawal.id,
   })
-  if (claimError) {
+  if (claimError || !claimedReferral) {
     await supabase.from("transactions").delete().eq("id", withdrawal.id).eq("user_id", user.id).eq("status", "pending")
     await supabase.from("profiles").update({ wallet_balance: Number(profile.wallet_balance) }).eq("id", user.id)
     return { ok: false, error: withdrawalReferralError }
