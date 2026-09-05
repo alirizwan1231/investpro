@@ -81,6 +81,12 @@ export async function submitWithdrawal(formData: FormData): Promise<ActionResult
   if (amount < min) return { ok: false, error: `Minimum withdrawal is Rs ${min}.` }
   if (amount > Number(profile.wallet_balance)) return { ok: false, error: "Insufficient wallet balance." }
 
+  // Validate referral eligibility before reserving funds or creating a pending request.
+  const { data: hasAvailableReferral, error: eligibilityError } = await supabase.rpc("has_available_active_referral")
+  if (eligibilityError || !hasAvailableReferral) {
+    return { ok: false, error: withdrawalReferralError }
+  }
+
   // Reserve funds.
   const { error: updErr } = await supabase
     .from("profiles")
